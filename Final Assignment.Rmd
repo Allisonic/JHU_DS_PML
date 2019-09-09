@@ -1,0 +1,100 @@
+---
+title: "Final Assignment"
+output: html_notebook
+---
+
+
+```{r}
+#load data & data summary
+setwd("C:\\Users\\37676\\Desktop\\JHU Data Science\\Practical Machine Learning")
+data <- read.csv("pml-training.csv",header=TRUE)
+predict_data <- read.csv("pml-testing.csv",header=TRUE)
+```
+
+```{r}
+str(data)
+```
+
+
+```{r}
+#Remove columns in which N/A is more than 10%
+library(dplyr)
+data <- data %>% select_if(function(x) sum(is.na(x))/nrow(data) < 0.1)
+
+```
+
+```{r}
+# check the dataset
+str(data)
+```
+
+```{r}
+# some of the columns contains a lot of blanks, also we would like to keep only columns of interest, ID and timestamp will be removed
+y <- data$classe
+data <- data %>% select_if(function(x) is.numeric(x))
+data$class <- y
+data<-data[,c(4:57)]
+```
+
+
+```{r}
+#Predicted dataset cleaning
+library(dplyr)
+predict_data <- predict_data %>% select_if(function(x) sum(is.na(x))/nrow(predict_data) < 0.1)
+predict_data <- predict_data %>% select_if(function(x) is.numeric(x))
+pred_ID <-predict_data$X
+predict_data<-predict_data[,c(4:57)]
+```
+
+```{r}
+# split dataset into training set and testing set
+library(ggplot2)
+library(lattice)
+library(nnet)
+library(caret)
+library(e1071)
+#Stratfied sampling
+set.seed(787)
+TrainingDataIndex <- createDataPartition(data$class, p=0.75, list = FALSE)
+#create training set and testing set
+training <- data[TrainingDataIndex,]
+testing <- data[-TrainingDataIndex,]
+TrainingParameters <- trainControl(method = "repeatedcv", number = 10, repeats=10)
+```
+
+```{r}
+#Train KNN model
+KNNModel <- train(training[,-54], training$class,
+                  method = "knn",
+                  trControl = trainControl(method = "boot"),
+                  preProcess=c("scale","center"))
+```
+
+```{r}
+#Testing with KNN
+KNNPredictions <- predict(KNNModel, testing)
+# Create confusion matrix
+cmKNN <- confusionMatrix(KNNPredictions, testing$class)
+print(cmKNN)
+```
+
+```{r}
+# Predict the result with KNN
+KNN_Pred <- predict(KNNModel, predict_data)
+predict_result<-cbind.data.frame(pred_ID,KNN_Pred)
+predict_result
+```
+
+Train the dataset with neutral network
+```{r}
+NNModel <- train(training[,-57], training$class,
+                  method = "nnet",
+                  preProcess=c("scale","center"),
+                  na.action = na.omit)
+```
+
+```{r}
+```
+Data Resource: Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6.
+
+```{r}
