@@ -1,9 +1,11 @@
 ---
 title: "Final Assignment"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
-
+### Load dataset and a glance at the dataset
 ```{r}
 #load data & data summary
 setwd("C:\\Users\\37676\\Desktop\\JHU Data Science\\Practical Machine Learning")
@@ -11,11 +13,13 @@ data <- read.csv("pml-training.csv",header=TRUE)
 predict_data <- read.csv("pml-testing.csv",header=TRUE)
 ```
 
-```{r}
+```{r include=FALSE}
 str(data)
+summary(data)
 ```
 
-
+## Data Cleaning
+We can find that the dataset contains many columns with NAs and very entries which will contribute very little to our model, therefore we would like to remove these columns
 ```{r}
 #Remove columns in which N/A is more than 10%
 library(dplyr)
@@ -23,11 +27,12 @@ data <- data %>% select_if(function(x) sum(is.na(x))/nrow(data) < 0.1)
 
 ```
 
-```{r}
-# check the dataset
+```{r include=FALSE}
+# check the dataset again
 str(data)
 ```
 
+Now, columns with a lot of blanks will be removed. Also, we can see that the first few columns are ID and timstamp for the observations, these are not feactures, so they should be excluded.
 ```{r}
 # some of the columns contains a lot of blanks, also we would like to keep only columns of interest, ID and timestamp will be removed
 y <- data$classe
@@ -36,7 +41,7 @@ data$class <- y
 data<-data[,c(4:57)]
 ```
 
-
+Dataset for the quiz will be clean in the same way.
 ```{r}
 #Predicted dataset cleaning
 library(dplyr)
@@ -45,56 +50,61 @@ predict_data <- predict_data %>% select_if(function(x) is.numeric(x))
 pred_ID <-predict_data$X
 predict_data<-predict_data[,c(4:57)]
 ```
+Now all datasets have no NA and blank, only feactures and label are included in our dataset. 
 
+### Modeling
+
+Dataset will be split in to training set and testing set, 25% of the observations will be saved for testing.
 ```{r}
 # split dataset into training set and testing set
-library(ggplot2)
-library(lattice)
-library(nnet)
 library(caret)
 library(e1071)
-#Stratfied sampling
+# Stratfied sampling
 set.seed(787)
 TrainingDataIndex <- createDataPartition(data$class, p=0.75, list = FALSE)
-#create training set and testing set
+# create training set and testing set
 training <- data[TrainingDataIndex,]
 testing <- data[-TrainingDataIndex,]
-TrainingParameters <- trainControl(method = "repeatedcv", number = 10, repeats=10)
+# To increase the performance of the model, 5-fold cross validation will be used in the modeling training
+TrainingParameters <- trainControl(method = "cv", number = 5)
 ```
 
+Train the model
 ```{r}
-#Train KNN model
 KNNModel <- train(training[,-54], training$class,
-                  method = "knn",
-                  trControl = trainControl(method = "boot"),
-                  preProcess=c("scale","center"))
+                  method = "knn",                        
+                  trControl = TrainingParameters,        
+                  preProcess= c("scale","center"))       
 ```
 
+Evaluate the performance of the model on traing dataset
 ```{r}
-#Testing with KNN
+KNNPredictions <- predict(KNNModel, training)
+confusionMatrix(KNNPredictions, training$class)
+```
+From the confusion matrix above, we can see that the model was performing well on the training dataset, the 98.77% accuracy is a compelling index indicating that KNN is a good model for this problem. However, it could be an overfitted model,we still need to test it on reserved testing dataset. 
+
+Evaluate the out-of-sample error
+```{r}
+#Predict the label of testing dataset with KNN
 KNNPredictions <- predict(KNNModel, testing)
-# Create confusion matrix
-cmKNN <- confusionMatrix(KNNPredictions, testing$class)
-print(cmKNN)
-```
+# calculate out-of-sample-error
 
+missClass = function(values, predicted) {
+  sum(predicted != values) / length(values)
+}
+OOSE = missClass(testing$class, KNNPredictions)
+OOSE
+ 
+```
+Low out-of-sample error suggested that, we've got a good model. LOL.
+
+### Predict the quiz result with KNN
 ```{r}
-# Predict the result with KNN
 KNN_Pred <- predict(KNNModel, predict_data)
 predict_result<-cbind.data.frame(pred_ID,KNN_Pred)
 predict_result
 ```
 
-Train the dataset with neutral network
-```{r}
-NNModel <- train(training[,-57], training$class,
-                  method = "nnet",
-                  preProcess=c("scale","center"),
-                  na.action = na.omit)
-```
-
-```{r}
-```
 Data Resource: Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6.
 
-```{r}
